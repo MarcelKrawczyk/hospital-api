@@ -11,7 +11,7 @@ builder.Services.AddSwaggerGen();
 builder.Services.AddDbContext<HospitalDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
-builder.Services.AddScoped<PatientService>();
+builder.Services.AddScoped<IPatientService, PatientService>();
 var app = builder.Build();
 
 if (app.Environment.IsDevelopment())

@@ -5,7 +5,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace HospitalApi.Services;
 
-public class PatientService
+public class PatientService : IPatientService
 {
     private readonly HospitalDbContext _db;
 
