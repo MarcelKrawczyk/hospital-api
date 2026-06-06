@@ -1,95 +1,100 @@
 using HospitalApi.Data;
 using HospitalApi.DTOs;
-using Microsoft.EntityFrameworkCore;
 using HospitalApi.Models;
-
+using Microsoft.EntityFrameworkCore;
 
 namespace HospitalApi.Services;
 
-public class PatientService(HospitalDbContext db)
+public class PatientService
 {
-    public async Task<IEnumerable<PatientDto>> GetAllPatientsAsync(string? search)
-{
-    var query = db.Patients
-        .Include(p => p.Admissions).ThenInclude(a => a.Ward)
-        .Include(p => p.BedAssignments).ThenInclude(ba => ba.Bed).ThenInclude(b => b.BedType)
-        .Include(p => p.BedAssignments).ThenInclude(ba => ba.Bed).ThenInclude(b => b.Room).ThenInclude(r => r.Ward)
-        .AsQueryable();
+    private readonly HospitalDbContext _db;
 
-    if (!string.IsNullOrWhiteSpace(search))
+    public PatientService(HospitalDbContext db)
     {
-        query = query.Where(p =>
-            EF.Functions.Like(p.FirstName, $"%{search}%") ||
-            EF.Functions.Like(p.LastName, $"%{search}%"));
+        _db = db;
     }
 
-    var patients = await query.ToListAsync();
-
-    return patients.Select(p => new PatientDto
+    public async Task<IEnumerable<PatientDto>> GetAllPatientsAsync(string? search)
     {
-        Pesel = p.Pesel,
-        FirstName = p.FirstName,
-        LastName = p.LastName,
-        Age = p.Age,
-        Sex = p.Sex ? "Male" : "Female",
-        Admissions = p.Admissions.Select(a => new AdmissionDto
+        var query = _db.Patients
+            .Include(p => p.Admissions).ThenInclude(a => a.Ward)
+            .Include(p => p.BedAssignments).ThenInclude(ba => ba.Bed).ThenInclude(b => b.BedType)
+            .Include(p => p.BedAssignments).ThenInclude(ba => ba.Bed).ThenInclude(b => b.Room).ThenInclude(r => r.Ward)
+            .AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(search))
         {
-            Id = a.Id,
-            AdmissionDate = a.AdmissionDate,
-            DischargeDate = a.DischargeDate,
-            Ward = new WardDto
-            {
-                Id = a.Ward.Id,
-                Name = a.Ward.Name,
-                Description = a.Ward.Description
-            }
-        }).ToList(),
-        BedAssignments = p.BedAssignments.Select(ba => new BedAssignmentDto
+            query = query.Where(p =>
+                EF.Functions.Like(p.FirstName, $"%{search}%") ||
+                EF.Functions.Like(p.LastName, $"%{search}%"));
+        }
+
+        var patients = await query.ToListAsync();
+
+        return patients.Select(p => new PatientDto
         {
-            Id = ba.Id,
-            From = ba.From,
-            To = ba.To,
-            Bed = new BedDto
+            Pesel = p.Pesel,
+            FirstName = p.FirstName,
+            LastName = p.LastName,
+            Age = p.Age,
+            Sex = p.Sex ? "Male" : "Female",
+            Admissions = p.Admissions.Select(a => new AdmissionDto
             {
-                Id = ba.Bed.Id,
-                BedType = new BedTypeDto
+                Id = a.Id,
+                AdmissionDate = a.AdmissionDate,
+                DischargeDate = a.DischargeDate,
+                Ward = new WardDto
                 {
-                    Id = ba.Bed.BedType.Id,
-                    Name = ba.Bed.BedType.Name,
-                    Description = ba.Bed.BedType.Description
-                },
-                Room = new RoomDto
+                    Id = a.Ward.Id,
+                    Name = a.Ward.Name,
+                    Description = a.Ward.Description
+                }
+            }).ToList(),
+            BedAssignments = p.BedAssignments.Select(ba => new BedAssignmentDto
+            {
+                Id = ba.Id,
+                From = ba.From,
+                To = ba.To,
+                Bed = new BedDto
                 {
-                    Id = ba.Bed.Room.Id,
-                    HasTv = ba.Bed.Room.HasTv,
-                    Ward = new WardDto
+                    Id = ba.Bed.Id,
+                    BedType = new BedTypeDto
                     {
-                        Id = ba.Bed.Room.Ward.Id,
-                        Name = ba.Bed.Room.Ward.Name,
-                        Description = ba.Bed.Room.Ward.Description
+                        Id = ba.Bed.BedType.Id,
+                        Name = ba.Bed.BedType.Name,
+                        Description = ba.Bed.BedType.Description
+                    },
+                    Room = new RoomDto
+                    {
+                        Id = ba.Bed.Room.Id,
+                        HasTv = ba.Bed.Room.HasTv,
+                        Ward = new WardDto
+                        {
+                            Id = ba.Bed.Room.Ward.Id,
+                            Name = ba.Bed.Room.Ward.Name,
+                            Description = ba.Bed.Room.Ward.Description
+                        }
                     }
                 }
-            }
-        }).ToList()
-    });
-}
+            }).ToList()
+        });
+    }
 
-    public async Task<(BedAssignmentDto? Result, string? Error)> AssignBedAsync(string pesel,
-        AssignBedRequestDto request)
+    public async Task<(BedAssignmentDto? Result, string? Error)> AssignBedAsync(string pesel, AssignBedRequestDto request)
     {
-        var patient = await db.Patients.FindAsync(pesel);
+        var patient = await _db.Patients.FindAsync(pesel);
         if (patient is null)
             return (null, $"Patient with PESEL '{pesel}' was not found.");
 
-        var ward = await db.Wards.FirstOrDefaultAsync(w => w.Name == request.Ward);
+        var ward = await _db.Wards.FirstOrDefaultAsync(w => w.Name == request.Ward);
         if (ward is null)
             return (null, $"Ward '{request.Ward}' does not exist.");
 
-        var bedType = await db.BedTypes.FirstOrDefaultAsync(bt => bt.Name == request.BedType);
+        var bedType = await _db.BedTypes.FirstOrDefaultAsync(bt => bt.Name == request.BedType);
         if (bedType is null)
             return (null, $"Bed type '{request.BedType}' does not exist.");
 
-        var bed = await db.Beds
+        var bed = await _db.Beds
             .Include(b => b.BedType)
             .Include(b => b.Room).ThenInclude(r => r.Ward)
             .Where(b =>
@@ -101,8 +106,7 @@ public class PatientService(HospitalDbContext db)
             .FirstOrDefaultAsync();
 
         if (bed is null)
-            return (null,
-                $"No free bed of type '{request.BedType}' in ward '{request.Ward}' for the requested period.");
+            return (null, $"No free bed of type '{request.BedType}' in ward '{request.Ward}' for the requested period.");
 
         var assignment = new BedAssignment
         {
@@ -112,8 +116,8 @@ public class PatientService(HospitalDbContext db)
             To = request.To
         };
 
-        db.BedAssignments.Add(assignment);
-        await db.SaveChangesAsync();
+        _db.BedAssignments.Add(assignment);
+        await _db.SaveChangesAsync();
 
         return (new BedAssignmentDto
         {
